@@ -1,0 +1,51 @@
+name: Build and deploy to prod branch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Checkout prod branch
+        uses: actions/checkout@v4
+        with:
+          ref: prod
+          path: prod-branch
+
+      - name: Sync built files to prod branch
+        run: |
+          rsync -av --delete \
+            --exclude='.git' \
+            --exclude='.gitignore' \
+            --exclude='.htaccess' \
+            dist/ prod-branch/
+
+      - name: Commit and push to prod
+        run: |
+          cd prod-branch
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add -A
+          git diff --quiet && git diff --staged --quiet || git commit -m "deploy: ${{ github.sha }}"
+          git push origin prod
